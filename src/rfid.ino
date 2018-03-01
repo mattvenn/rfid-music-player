@@ -13,17 +13,24 @@ void setup_rfid()
     mfrc522.PCD_Init();		// Init MFRC522
 }
 
-String read_rfid()
+bool read_rfid()
 {
+    last_rfid = rfid;
     rfid = "";
-	// Look for new cards
-	if ( ! mfrc522.PICC_IsNewCardPresent()) {
-		return rfid;
-}
+
+    // this must be done for the card to continue reading a card that is left on the reader
+    byte bufferATQA[2];
+	byte bufferSize = sizeof(bufferATQA);
+	byte result = mfrc522.PICC_WakeupA(bufferATQA, &bufferSize);
+	if(result != mfrc522.STATUS_OK)
+        return false;
+
 	// Select one of the cards
-	if ( ! mfrc522.PICC_ReadCardSerial()) {
-		return rfid;
-	}
+	if ( ! mfrc522.PICC_ReadCardSerial())
+    {
+        Serial.println("no card");
+		return false;
+    }
 	
     mfrc522.PICC_HaltA();
 	for (byte i = 0; i < mfrc522.uid.size; i++) 
@@ -32,7 +39,8 @@ String read_rfid()
 		rfid.concat("0");
 		rfid.concat(String(mfrc522.uid.uidByte[i], HEX));
 	} 
+
     Serial.println(rfid);
-	return rfid;
+	return true;
 }
 
