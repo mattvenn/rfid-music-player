@@ -5,12 +5,13 @@
 //
 // This example code is in the public domain.
 
+#define FASTLED_ALLOW_INTERRUPTS 0
 #include <Audio.h>
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
 #include <FastLED.h>
-#define NUM_LEDS 18
+#define NUM_LEDS 10 // longer chains end up with corrupted leds
 #define DATA_PIN 6
 
 CRGB leds[NUM_LEDS];
@@ -22,7 +23,7 @@ void error();
 void play();
 
 SimplePatternList gPatterns = { start, wait, error, play };
-#define FRAMES_PER_SECOND 120
+#define FRAMES_PER_SECOND 100
 
 #define START_PATTERN   0
 #define WAIT_PATTERN    1
@@ -87,7 +88,7 @@ void start()
 void wait()
 {
     CRGBPalette16 myPal = wait_gp;
-    int pos = beatsin16( 13, 0, NUM_LEDS-1 );
+    int pos = beatsin16( 10, 0, NUM_LEDS-1 );
     leds[pos] = ColorFromPalette( myPal, gHue);
 }
 
@@ -100,7 +101,7 @@ void error()
 void play()
 {
     fadeToBlackBy( leds, NUM_LEDS, 20);
-    int pos = beatsin16( 13, 0, NUM_LEDS-1 );
+    int pos = beatsin16( 20, 0, NUM_LEDS-1 );
     leds[pos] += CHSV( gHue, 255, 255);
 }
 
@@ -117,6 +118,8 @@ void setup() {
     AudioMemory(5);
 
     sgtl5000_1.enable();
+
+    led_pattern = PLAY_PATTERN; 
 }
 
 
@@ -139,6 +142,7 @@ void loop() {
         mixer1.gain(1,vol);
         Serial.println(vol);
     }
+
 
     switch(state)
     {
@@ -215,8 +219,6 @@ void loop() {
                 state = STATE_PLAY_NEXT;
             }
 
-
-             
             //Serial.print(AudioProcessorUsageMax());	 
             //Serial.println("% All");
 
@@ -249,7 +251,6 @@ void loop() {
             Serial.println("no case!");
             break;
     }
-
 
 }
 
