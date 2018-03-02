@@ -10,10 +10,27 @@
 #include <SPI.h>
 #include <SD.h>
 #include <FastLED.h>
-#define NUM_LEDS 10
+#define NUM_LEDS 18
 #define DATA_PIN 6
 
 CRGB leds[NUM_LEDS];
+
+typedef void (*SimplePatternList[])();
+void start();
+void wait();
+void error();
+void play();
+
+SimplePatternList gPatterns = { start, wait, error, play };
+#define FRAMES_PER_SECOND 120
+
+#define START_PATTERN   0
+#define WAIT_PATTERN    1
+#define ERROR_PATTERN   2
+#define PLAY_PATTERN    3
+
+uint8_t led_pattern = START_PATTERN; // Index number of which pattern is current
+uint8_t gHue = 0; // rotating "base color" used by many of the patterns
 
 #include <play_sd_mp3.h>
 
@@ -25,6 +42,7 @@ CRGB leds[NUM_LEDS];
 #define STATE_PLAY_NO_CARD  5
 #define STATE_SETUP_SD      6
 #define STATE_SD_ERROR      7
+#define STATE_WAIT_CHANGE_CARD      9
 
 // pin defs
 #define SD_SS               10
@@ -32,12 +50,17 @@ CRGB leds[NUM_LEDS];
 int state = STATE_START;
 
 // GUItool: begin automatically generated code
+AudioMixer4              mixer1;         //xy=641,541
 AudioPlaySdMp3           playMp31;       //xy=154,78
 AudioOutputI2S           i2s1;           //xy=334,89
-AudioConnection          patchCord1(playMp31, 0, i2s1, 0);
-AudioConnection          patchCord2(playMp31, 1, i2s1, 1);
+
+AudioConnection          patchCord1(playMp31, 0, mixer1, 0);
+AudioConnection          patchCord2(playMp31, 1, mixer1, 1);
+
+AudioConnection          patchCord3(mixer1, 0, i2s1, 0);
+AudioConnection          patchCord4(mixer1, 0, i2s1, 1);
+
 AudioControlSGTL5000     sgtl5000_1;     //xy=240,153
-// GUItool: end automatically generated code
 
 String rfid = "";
 String filename = "";
@@ -45,28 +68,78 @@ String dir_name = "";
 File directory;
 String last_rfid = "";
 
+DEFINE_GRADIENT_PALETTE( error_gp ) {
+  0,     0,  0,  0,   //black
+128,   255,  0,  0,   //red
+255,     0,  0,  0,   //black
+};
+
+DEFINE_GRADIENT_PALETTE( wait_gp ) {
+  0,   255,  0,  255,   //purple
+128,     0,  0,  255,   //blue
+255,   255,  0,  255,   //purple
+};
+
+void start()
+{
+    FastLED.clear(); 
+}
+void wait()
+{
+    CRGBPalette16 myPal = wait_gp;
+    int pos = beatsin16( 13, 0, NUM_LEDS-1 );
+    leds[pos] = ColorFromPalette( myPal, gHue);
+}
+
+void error()
+{
+    CRGBPalette16 myPal = error_gp;
+    fill_solid(leds, NUM_LEDS, ColorFromPalette( myPal, gHue));
+}
+
+void play()
+{
+    fadeToBlackBy( leds, NUM_LEDS, 20);
+    int pos = beatsin16( 13, 0, NUM_LEDS-1 );
+    leds[pos] += CHSV( gHue, 255, 255);
+}
+
 void setup() {
     Serial.begin(9600);
-    //while(!Serial) {;;}
     Serial.println("started");
     setup_rfid();
 
     FastLED.addLeds<WS2812, DATA_PIN, GRB>(leds, NUM_LEDS);
+    FastLED.setBrightness(44);
 
     // Audio connections require memory to work.  For more
     // detailed information, see the MemoryAndCpuUsage example
     AudioMemory(5);
 
     sgtl5000_1.enable();
-    sgtl5000_1.volume(0.01);
 }
 
-float get_breath(float speed)
-{
-    return (exp(sin(millis()/speed*PI)) - 0.36787944)*30;
-}
 
 void loop() {
+    gPatterns[led_pattern]();
+
+    // send the 'leds' array out to the actual LED strip
+    FastLED.show();  
+    // insert a delay to keep the framerate modest
+    FastLED.delay(1000/FRAMES_PER_SECOND); 
+
+    // do some periodic updates
+    EVERY_N_MILLISECONDS( 15 ) { gHue++; } // slowly cycle the "base color" through the rainbow
+
+    EVERY_N_MILLISECONDS( 100) {
+        // volume
+        float vol = analogRead(7);
+        vol = vol / 1024;
+        mixer1.gain(0,vol);
+        mixer1.gain(1,vol);
+        Serial.println(vol);
+    }
+
     switch(state)
     {
         case STATE_START:
@@ -85,16 +158,12 @@ void loop() {
         {
             // stuck here forever
             // breath efffect: https://gist.github.com/hsiboy/4eae11073e9d5b21eae3
-            fill_solid(leds, NUM_LEDS, CRGB::Red);
-            FastLED.setBrightness(get_breath(4000));
-            FastLED.show(); 
+            led_pattern = ERROR_PATTERN;
             break;
         }
         case STATE_WAIT_STOP:
         {
-            fill_solid(leds, NUM_LEDS, CRGB::Green);
-            FastLED.setBrightness(get_breath(4000));
-            FastLED.show(); 
+            led_pattern = WAIT_PATTERN;
 
             if(read_rfid()) // returns true or false, updates the global rfid variable
             {
@@ -112,12 +181,19 @@ void loop() {
             break;
         }
 
+        case STATE_WAIT_CHANGE_CARD:
+            led_pattern = WAIT_PATTERN;
+            read_rfid();
+            if(rfid != last_rfid) // different card
+                state = STATE_WAIT_STOP;
+            break;
+
         case STATE_PLAY_NEXT:
             {
                 File entry = directory.openNextFile();
                 if (! entry) // no more files or this wasn't a directory
                 {
-                    state = STATE_WAIT_STOP;
+                    state = STATE_WAIT_CHANGE_CARD;
                     Serial.println("no dir!");
                 }
                 else
@@ -131,10 +207,7 @@ void loop() {
             }
 
         case STATE_WAIT_PLAY:
-
-            fill_solid(leds, NUM_LEDS, CRGB::Blue);
-            FastLED.setBrightness(get_breath(2000));
-            FastLED.show(); 
+            led_pattern = PLAY_PATTERN;
 
             if(!playMp31.isPlaying())
             {
@@ -142,9 +215,6 @@ void loop() {
                 state = STATE_PLAY_NEXT;
             }
 
-            // has the optional volume pot soldered
-            //float vol = analogRead(15);
-            //vol = vol / 1024;
 
              
             //Serial.print(AudioProcessorUsageMax());	 
@@ -180,7 +250,7 @@ void loop() {
             break;
     }
 
-    delay(10);
+
 }
 
 bool get_dir_from_rfid(String rfid)
