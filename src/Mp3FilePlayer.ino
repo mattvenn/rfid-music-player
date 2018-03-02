@@ -9,6 +9,11 @@
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
+#include <FastLED.h>
+#define NUM_LEDS 10
+#define DATA_PIN 6
+
+CRGB leds[NUM_LEDS];
 
 #include <play_sd_mp3.h>
 
@@ -18,6 +23,8 @@
 #define STATE_PLAY_NEXT     3
 #define STATE_WAIT_PLAY     4
 #define STATE_PLAY_NO_CARD  5
+#define STATE_SETUP_SD      6
+#define STATE_SD_ERROR      7
 
 // pin defs
 #define SD_SS               10
@@ -44,37 +51,51 @@ void setup() {
     Serial.println("started");
     setup_rfid();
 
+    FastLED.addLeds<WS2812, DATA_PIN, GRB>(leds, NUM_LEDS);
+
     // Audio connections require memory to work.  For more
     // detailed information, see the MemoryAndCpuUsage example
     AudioMemory(5);
 
     sgtl5000_1.enable();
     sgtl5000_1.volume(0.01);
-
-    if (!(SD.begin(SD_SS)))
-    {
-        // stop here, but print a message repetitively
-        while (true)
-        {
-            Serial.println("Unable to access the SD card");
-            delay(500);
-        }
-    }
 }
 
-
+float get_breath(float speed)
+{
+    return (exp(sin(millis()/speed*PI)) - 0.36787944)*30;
+}
 
 void loop() {
     switch(state)
     {
         case STATE_START:
         {
-            state = STATE_WAIT_STOP;
+            state = STATE_SETUP_SD;
             break;
         }
+        case STATE_SETUP_SD:
+            if(SD.begin(SD_SS))
+                state = STATE_WAIT_STOP;
+            else
+                state = STATE_SD_ERROR;
+            break;
 
+        case STATE_SD_ERROR:
+        {
+            // stuck here forever
+            // breath efffect: https://gist.github.com/hsiboy/4eae11073e9d5b21eae3
+            fill_solid(leds, NUM_LEDS, CRGB::Red);
+            FastLED.setBrightness(get_breath(4000));
+            FastLED.show(); 
+            break;
+        }
         case STATE_WAIT_STOP:
         {
+            fill_solid(leds, NUM_LEDS, CRGB::Green);
+            FastLED.setBrightness(get_breath(4000));
+            FastLED.show(); 
+
             if(read_rfid()) // returns true or false, updates the global rfid variable
             {
                 if(!get_dir_from_rfid(rfid)) // returns true or false, updates the global filename variable
@@ -110,6 +131,11 @@ void loop() {
             }
 
         case STATE_WAIT_PLAY:
+
+            fill_solid(leds, NUM_LEDS, CRGB::Blue);
+            FastLED.setBrightness(get_breath(2000));
+            FastLED.show(); 
+
             if(!playMp31.isPlaying())
             {
                 Serial.println("mp3 ended");
@@ -154,7 +180,7 @@ void loop() {
             break;
     }
 
-    delay(100);
+    delay(10);
 }
 
 bool get_dir_from_rfid(String rfid)
