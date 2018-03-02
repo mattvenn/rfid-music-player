@@ -107,6 +107,7 @@ void play()
 
 void setup() {
     Serial.begin(9600);
+    //while(!Serial){;;}
     Serial.println("started");
     setup_rfid();
 
@@ -140,7 +141,6 @@ void loop() {
         vol = vol / 1024;
         mixer1.gain(0,vol);
         mixer1.gain(1,vol);
-        Serial.println(vol);
     }
 
 
@@ -180,7 +180,7 @@ void loop() {
                 Serial.print(dir_name);
                 Serial.println("]");
                 directory = SD.open(dir_name.c_str());
-                Serial.println(directory.isDirectory());
+                Serial.println(directory.isDirectory()); // TODO if this fails, do something. Can happen if the index file has a typo
             }
             break;
         }
