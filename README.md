@@ -6,7 +6,8 @@
 * adafruit i2s amp
 * rfid rc522 reader
 * sd card breakout
-* string of leds
+* string of leds - currently ws2812, but need to switch to a clocked version for
+ compatibility with audio library.
 
 ## pin allocations
 
