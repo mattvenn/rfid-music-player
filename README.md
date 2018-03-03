@@ -16,6 +16,8 @@
     9               i2s bclk
     10              cs sd card
     12              miso sd and rfid
+
+
     14              sck sd and rfid
     15              rfid cs
     16              rfid reset
@@ -27,3 +29,13 @@
     vin (5v)        i2s amp psu, led string +5v
     
 
+## sd pinout
+
+    1           n/c
+    2           cs
+    3           mosi    
+    4           3.3v
+    5           clk
+    6           gnd
+    7           miso
+    8           n/c
