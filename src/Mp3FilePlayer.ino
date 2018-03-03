@@ -5,13 +5,14 @@
 //
 // This example code is in the public domain.
 
+//#define FASTLED_INTERRUPT_RETRY_COUNT 1
 #define FASTLED_ALLOW_INTERRUPTS 0
 #include <Audio.h>
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
 #include <FastLED.h>
-#define NUM_LEDS 10 // longer chains end up with corrupted leds
+#define NUM_LEDS 8 // longer chains end up with corrupted leds
 #define DATA_PIN 6
 
 CRGB leds[NUM_LEDS];
